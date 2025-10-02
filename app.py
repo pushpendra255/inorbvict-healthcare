@@ -10,10 +10,13 @@ from sentence_transformers import SentenceTransformer
 class FlowChatbot:
     def __init__(self):
         self.questions = [
-            "👤 What is your name?",
+            "👤 What is your full name?",
             "🎓 What is your highest qualification?",
+            "🏫 Which university/college did you graduate from?",
             "💼 How many years of work experience do you have?",
-            "🤖 Why do you want to join AI/ML at INORBVICT?"
+            "🛠️ What are your key technical skills?",
+            "🤖 Why do you want to join AI/ML at INORBVICT?",
+            "🌟 What is your career goal for the next 5 years?"
         ]
         self.answers = {}
         self.index = 0
@@ -31,7 +34,7 @@ class FlowChatbot:
         return True, "✅ Answer recorded!"
 
     def summary(self):
-        return "\n".join([f"{q}: {a}" for q, a in self.answers.items()])
+        return "\n".join([f"**{q}** → {a}" for q, a in self.answers.items()])
 
 
 # -----------------------------
@@ -86,10 +89,10 @@ class RAGChatbot:
 # -----------------------------
 # Part C – Streamlit UI
 # -----------------------------
-st.set_page_config(page_title="INORBVICT AIML Assignment", layout="wide")
+st.set_page_config(page_title="INORBVICT AIML Assignment", layout="centered")
 
 st.title("🤖 INORBVICT – AIML Assignment Chatbot")
-st.write("Select a mode from the dropdown below to test different parts of the assignment.")
+st.markdown("### Select a mode from the dropdown below 👇")
 
 mode = st.selectbox("Choose Mode", ["Part A – Flow Chatbot", "Part B – RAG Chatbot"])
 
@@ -97,7 +100,7 @@ mode = st.selectbox("Choose Mode", ["Part A – Flow Chatbot", "Part B – RAG C
 # UI for Part A
 # -----------------------------
 if mode == "Part A – Flow Chatbot":
-    st.header("🗂️ Flow-Based Chatbot (Guided Q&A)")
+    st.header("🗂️ Flow-Based Chatbot (Guided Interview)")
 
     if "flow" not in st.session_state:
         st.session_state.flow = FlowChatbot()
@@ -105,14 +108,19 @@ if mode == "Part A – Flow Chatbot":
     q = st.session_state.flow.current_question()
     if q:
         st.info(q)
-        ans = st.text_input("Your Answer", key=f"flow_q_{st.session_state.flow.index}")
-        if st.button("Submit Answer"):
+        ans = st.text_input("✍️ Your Answer", key=f"flow_q_{st.session_state.flow.index}")
+        if st.button("➡️ Submit Answer"):
             ok, msg = st.session_state.flow.submit(ans)
-            st.success(msg if ok else msg)
+            if ok:
+                st.success(msg)
+                st.rerun()  # move to next question
+            else:
+                st.warning(msg)
     else:
-        st.success("🎉 All questions answered!")
-        st.markdown("### 📋 Summary")
-        st.text(st.session_state.flow.summary())
+        st.balloons()
+        st.success("🎉 All questions answered successfully!")
+        st.markdown("### 📋 Candidate Summary")
+        st.markdown(st.session_state.flow.summary())
 
 # -----------------------------
 # UI for Part B
@@ -124,7 +132,7 @@ elif mode == "Part B – RAG Chatbot":
         st.session_state.rag = RAGChatbot()
 
     uploaded_files = st.file_uploader(
-        "Upload up to 20 PDF files",
+        "📂 Upload up to 20 PDF files",
         type=["pdf"],
         accept_multiple_files=True
     )
@@ -134,14 +142,14 @@ elif mode == "Part B – RAG Chatbot":
             st.error("⚠️ You can upload maximum 20 files only.")
         else:
             st.session_state.rag.load_pdfs(uploaded_files)
-            st.success(f"Loaded {len(uploaded_files)} file(s) successfully!")
+            st.success(f"✅ Loaded {len(uploaded_files)} file(s) successfully!")
 
-    query = st.text_input("Ask a question based on the uploaded PDFs")
+    query = st.text_input("🔍 Ask a question from the uploaded PDFs")
     if st.button("Get Answer"):
         if query.strip():
-            with st.spinner("🔍 Searching in uploaded documents..."):
+            with st.spinner("🤔 Thinking... Searching in your documents..."):
                 ans = st.session_state.rag.answer(query)
-                st.markdown("### ✅ Answer")
+                st.markdown("### 📝 Answer")
                 st.write(ans)
         else:
             st.warning("Please enter a question.")
