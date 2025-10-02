@@ -176,39 +176,31 @@ def free_chat():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    user_input = st.text_input("📝 Type your message and press Send")
-
-    if st.button("Send"):
-        if user_input.strip():
-            st.session_state.chat_history.append(("user", user_input))
-            # call Groq for response
-            bot_reply = query_groq(user_input)
-            st.session_state.chat_history.append(("bot", bot_reply))
-
-    # Display messages
+    # 📌 Show all previous messages above input box
     for role, msg in st.session_state.chat_history:
         if role == "user":
-            st.markdown(f"<div style='text-align:right;padding:10px;margin:5px 0;'><b>You:</b> {msg}</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div style='text-align:right;padding:10px;margin:5px 0;color:white;background:#0B93F6;border-radius:10px;max-width:70%;margin-left:auto;'><b>You:</b> {msg}</div>",
+                unsafe_allow_html=True
+            )
         else:
-            st.markdown(f"<div style='text-align:left;padding:10px;margin:5px 0;'><b>Bot:</b> {msg}</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div style='text-align:left;padding:10px;margin:5px 0;background:#E5E5EA;border-radius:10px;max-width:70%;margin-right:auto;'><b>Bot:</b> {msg}</div>",
+                unsafe_allow_html=True
+            )
 
-# --------------------------
-# MAIN APP
-# --------------------------
-def main():
-    st.set_page_config(page_title="INORBVICT AIML Assignment", layout="wide", page_icon="🚀")
-    st.title("🚀 INORBVICT – AIML Assignment Chatbot")
-    st.markdown("---")
+    # 📝 Chat input (auto clears & submit on Enter)
+    user_input = st.chat_input("Type your message...")
 
-    option = st.sidebar.radio("🔽 Select Mode", 
-                              ["Flow Mode (Part A)", "RAG Mode (Part B)", "Chat Interface (Part C)"])
+    if user_input:  
+        # Add user message
+        st.session_state.chat_history.append(("user", user_input))
 
-    if option == "Flow Mode (Part A)":
-        flow_based_chat()
-    elif option == "RAG Mode (Part B)":
-        rag_chatbot()
-    elif option == "Chat Interface (Part C)":
-        free_chat()
+        # Call Groq API for reply
+        bot_reply = query_groq(user_input)
+        st.session_state.chat_history.append(("bot", bot_reply))
+
+        st.rerun()  # 🔄 rerun to refresh UI & clear input
 
 if __name__ == "__main__":
     main()
