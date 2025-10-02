@@ -102,7 +102,6 @@ def rag_chatbot():
         st.session_state.vectorizer = None
         st.session_state.embeddings = None
         st.session_state.docs = None
-        st.session_state.last_answer = None
 
     uploaded_files = st.file_uploader("📂 Upload up to 20 PDFs", type="pdf", accept_multiple_files=True)
 
@@ -118,39 +117,39 @@ def rag_chatbot():
         st.success("✅ Documents processed. You may now ask a question.")
 
     query = st.text_input("💭 Your Question")
-    if query.strip() == "":
-        st.session_state.last_answer = None
-
     if st.button("Submit Question"):
         if query and st.session_state.vectorizer is not None:
             q_vec = st.session_state.vectorizer.transform([query])
             sims = cosine_similarity(q_vec, st.session_state.embeddings).flatten()
             idx = sims.argmax()
-            answer = st.session_state.docs[idx][:600] + "..."
-            st.session_state.last_answer = answer
+
+            if sims[idx] > 0.2:  # threshold for relevance
+                answer = st.session_state.docs[idx][:600] + "..."
+                st.markdown("### 📝 Answer")
+                st.info(answer)
+            else:
+                st.warning("⚠️ No relevant answer found in your uploaded documents.")
         elif query and st.session_state.vectorizer is None:
             st.warning("⚠️ Upload PDF(s) first.")
-
-    if st.session_state.last_answer:
-        st.markdown("### 📝 Answer")
-        st.info(st.session_state.last_answer)
 
 # --------------------------
 # PART C - Free Chat Interface
 # --------------------------
 def free_chat():
     st.subheader("💬 Free Chatbot (Part C)")
-    st.caption("Chat casually with the bot. It remembers your conversation.")
+    st.caption("Chat casually with the bot. It remembers your conversation like a real chat.")
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    user_input = st.text_input("📝 Type your message")
+    user_input = st.text_input("📝 Type your message and press Send")
+
     if st.button("Send"):
         if user_input.strip():
-            st.session_state.chat_history.append(("🧑 You", user_input))
+            # Add user message
+            st.session_state.chat_history.append(("user", user_input))
 
-            # Rule-based simple responses
+            # Bot response
             msg = user_input.lower()
             if "hello" in msg:
                 response = "Hi 👋! Nice to meet you."
@@ -160,14 +159,21 @@ def free_chat():
                 response = "Goodbye! Take care 👋"
             else:
                 response = f"I understood: **{user_input}**"
-            st.session_state.chat_history.append(("🤖 Bot", response))
 
-    if st.session_state.chat_history:
-        for role, msg in st.session_state.chat_history:
-            if "You" in role:
-                st.markdown(f"<div style='background:#E3F2FD;padding:8px;border-radius:10px;margin:5px 0'><b>{role}:</b> {msg}</div>", unsafe_allow_html=True)
-            else:
-                st.markdown(f"<div style='background:#F1F8E9;padding:8px;border-radius:10px;margin:5px 0'><b>{role}:</b> {msg}</div>", unsafe_allow_html=True)
+            st.session_state.chat_history.append(("bot", response))
+
+    # Display chat in reverse (latest at bottom like real chat)
+    for role, msg in st.session_state.chat_history:
+        if role == "user":
+            st.markdown(
+                f"<div style='text-align:right;background:#DCF8C6;padding:10px;border-radius:10px;margin:5px 0;'><b>You:</b> {msg}</div>",
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f"<div style='text-align:left;background:#E8EAF6;padding:10px;border-radius:10px;margin:5px 0;'><b>Bot:</b> {msg}</div>",
+                unsafe_allow_html=True
+            )
 
 # --------------------------
 # MAIN APP
