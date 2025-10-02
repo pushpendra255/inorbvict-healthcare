@@ -8,65 +8,59 @@ from sklearn.metrics.pairwise import cosine_similarity
 # PART A - Flow Based Chatbot
 # --------------------------
 def flow_based_chat():
-    st.header("🗣️ Flow-Based Chatbot (Part A)")
+    st.subheader("🗣️ Flow-Based Chatbot (Part A)")
+    st.caption("Fill in your details step by step, and get a professional profile summary.")
 
     if "step" not in st.session_state:
         st.session_state.step = 1
     if "responses" not in st.session_state:
         st.session_state.responses = {}
 
-    # Step 1: Name
     if st.session_state.step == 1:
-        name = st.text_input("👉 What is your full name?")
-        if st.button("Submit Name"):
-            if name.strip() != "":
+        name = st.text_input("👉 Full Name")
+        if st.button("Next ➡️"):
+            if name.strip():
                 st.session_state.responses["Name"] = name
                 st.session_state.step = 2
                 st.rerun()
             else:
                 st.warning("Please enter your name.")
 
-    # Step 2: Age
     elif st.session_state.step == 2:
-        age = st.number_input("🎂 How old are you?", min_value=10, max_value=100, step=1)
-        if st.button("Submit Age"):
+        age = st.number_input("🎂 Age", min_value=10, max_value=100, step=1)
+        if st.button("Next ➡️"):
             st.session_state.responses["Age"] = age
             st.session_state.step = 3
             st.rerun()
 
-    # Step 3: Email
     elif st.session_state.step == 3:
-        email = st.text_input("📧 What is your email address?")
-        if st.button("Submit Email"):
+        email = st.text_input("📧 Email Address")
+        if st.button("Next ➡️"):
             if "@" in email and "." in email:
                 st.session_state.responses["Email"] = email
                 st.session_state.step = 4
                 st.rerun()
             else:
-                st.warning("Please enter a valid email.")
+                st.warning("Enter a valid email.")
 
-    # Step 4: Skills
     elif st.session_state.step == 4:
-        skills = st.text_area("💡 What are your key skills? (comma separated)")
-        if st.button("Submit Skills"):
+        skills = st.text_area("💡 Key Skills (comma separated)")
+        if st.button("Next ➡️"):
             st.session_state.responses["Skills"] = skills
             st.session_state.step = 5
             st.rerun()
 
-    # Step 5: Experience
     elif st.session_state.step == 5:
-        exp = st.radio("📌 How much experience do you have?",
-                       ["Fresher", "1-2 years", "3-5 years", "5+ years"])
-        if st.button("Submit Experience"):
+        exp = st.radio("📌 Experience", ["Fresher", "1-2 years", "3-5 years", "5+ years"])
+        if st.button("Finish ✅"):
             st.session_state.responses["Experience"] = exp
             st.session_state.step = 6
             st.rerun()
 
-    # Final Summary
     elif st.session_state.step == 6:
-        st.success("✅ Thank you! Here’s your profile summary:")
+        st.success("✅ Profile Completed")
         st.markdown(f"""
-        ### 🎉 Profile Summary
+        ### 🎉 Candidate Profile
         - **👤 Name:** {st.session_state.responses.get("Name")}
         - **🎂 Age:** {st.session_state.responses.get("Age")}
         - **📧 Email:** {st.session_state.responses.get("Email")}
@@ -74,8 +68,7 @@ def flow_based_chat():
         - **📌 Experience:** {st.session_state.responses.get("Experience")}
         """)
         st.balloons()
-
-        if st.button("🔄 Restart"):
+        if st.button("🔄 Restart Form"):
             st.session_state.step = 1
             st.session_state.responses = {}
             st.rerun()
@@ -102,72 +95,90 @@ def build_vectorstore(texts):
     return vectorizer, embeddings
 
 def rag_chatbot():
-    st.header("📚 RAG Chatbot (Part B)")
-    st.markdown("Upload up to **20 PDFs**, then ask any question. The bot will answer only from uploaded docs.")
+    st.subheader("📚 RAG Chatbot (Part B)")
+    st.caption("Upload documents and ask focused questions. Answers are based only on your uploaded content.")
 
     if "vectorizer" not in st.session_state:
         st.session_state.vectorizer = None
         st.session_state.embeddings = None
         st.session_state.docs = None
+        st.session_state.last_answer = None
 
-    uploaded_files = st.file_uploader("📂 Upload PDF documents", type="pdf", accept_multiple_files=True)
+    uploaded_files = st.file_uploader("📂 Upload up to 20 PDFs", type="pdf", accept_multiple_files=True)
 
     if uploaded_files:
         if len(uploaded_files) > 20:
             st.error("⚠️ You can upload maximum 20 PDFs.")
             return
-
         texts = extract_text_from_pdfs(uploaded_files)
         vectorizer, embeddings = build_vectorstore(texts)
         st.session_state.vectorizer = vectorizer
         st.session_state.embeddings = embeddings
         st.session_state.docs = texts
-        st.success("✅ Documents processed successfully! Now ask your question below.")
+        st.success("✅ Documents processed. You may now ask a question.")
 
-    query = st.text_input("💭 Ask a question about your uploaded documents:")
-    if query and st.session_state.vectorizer is not None:
-        q_vec = st.session_state.vectorizer.transform([query])
-        sims = cosine_similarity(q_vec, st.session_state.embeddings).flatten()
-        idx = sims.argmax()
-        answer = st.session_state.docs[idx][:600] + "..."  # snippet
-        st.markdown(f"### 📝 Answer\n{answer}")
-    elif query and st.session_state.vectorizer is None:
-        st.warning("⚠️ Please upload PDF(s) first.")
+    query = st.text_input("💭 Your Question")
+    if query.strip() == "":
+        st.session_state.last_answer = None
+
+    if st.button("Submit Question"):
+        if query and st.session_state.vectorizer is not None:
+            q_vec = st.session_state.vectorizer.transform([query])
+            sims = cosine_similarity(q_vec, st.session_state.embeddings).flatten()
+            idx = sims.argmax()
+            answer = st.session_state.docs[idx][:600] + "..."
+            st.session_state.last_answer = answer
+        elif query and st.session_state.vectorizer is None:
+            st.warning("⚠️ Upload PDF(s) first.")
+
+    if st.session_state.last_answer:
+        st.markdown("### 📝 Answer")
+        st.info(st.session_state.last_answer)
 
 # --------------------------
 # PART C - Free Chat Interface
 # --------------------------
 def free_chat():
-    st.header("💬 Chat Interface (Part C)")
-    st.write("This is a simple free-form chatbot where you can talk casually.")
+    st.subheader("💬 Free Chatbot (Part C)")
+    st.caption("Chat casually with the bot. It remembers your conversation.")
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    user_input = st.text_input("📝 Type your message:")
+    user_input = st.text_input("📝 Type your message")
     if st.button("Send"):
         if user_input.strip():
-            st.session_state.chat_history.append(("You", user_input))
-            # simple echo bot (can be replaced with LLM integration)
-            response = f"I understood your message: **{user_input}**"
-            st.session_state.chat_history.append(("Bot", response))
+            st.session_state.chat_history.append(("🧑 You", user_input))
+
+            # Rule-based simple responses
+            msg = user_input.lower()
+            if "hello" in msg:
+                response = "Hi 👋! Nice to meet you."
+            elif "how are you" in msg:
+                response = "I'm doing great, thanks for asking! 😊"
+            elif "bye" in msg:
+                response = "Goodbye! Take care 👋"
+            else:
+                response = f"I understood: **{user_input}**"
+            st.session_state.chat_history.append(("🤖 Bot", response))
 
     if st.session_state.chat_history:
         for role, msg in st.session_state.chat_history:
-            if role == "You":
-                st.markdown(f"**🧑‍💻 You:** {msg}")
+            if "You" in role:
+                st.markdown(f"<div style='background:#E3F2FD;padding:8px;border-radius:10px;margin:5px 0'><b>{role}:</b> {msg}</div>", unsafe_allow_html=True)
             else:
-                st.markdown(f"**🤖 Bot:** {msg}")
+                st.markdown(f"<div style='background:#F1F8E9;padding:8px;border-radius:10px;margin:5px 0'><b>{role}:</b> {msg}</div>", unsafe_allow_html=True)
 
 # --------------------------
-# MAIN APP - Dropdown
+# MAIN APP
 # --------------------------
 def main():
-    st.set_page_config(page_title="INORBVICT AIML Assignment", layout="wide")
+    st.set_page_config(page_title="INORBVICT AIML Assignment", layout="wide", page_icon="🚀")
     st.title("🚀 INORBVICT – AIML Assignment Chatbot")
+    st.markdown("---")
 
-    option = st.sidebar.selectbox("🔽 Select Mode", 
-                                  ["Flow Mode (Part A)", "RAG Mode (Part B)", "Chat Interface (Part C)"])
+    option = st.sidebar.radio("🔽 Select Mode", 
+                              ["Flow Mode (Part A)", "RAG Mode (Part B)", "Chat Interface (Part C)"])
 
     if option == "Flow Mode (Part A)":
         flow_based_chat()
