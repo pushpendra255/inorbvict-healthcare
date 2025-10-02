@@ -8,7 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 # --------------------------
 # 🔑 Groq API Config
 # --------------------------
-groq_api_key = "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"
+groq_api_key = "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"
 groq_url = "https://api.groq.com/openai/v1/chat/completions"
 headers = {
     "Authorization": f"Bearer {groq_api_key}",
