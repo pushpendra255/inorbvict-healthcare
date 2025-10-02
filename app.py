@@ -1,9 +1,13 @@
 import streamlit as st
+import os
 import requests
-from sentence_transformers import SentenceTransformer
-import numpy as np
+from PyPDF2 import PdfReader
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
-# -------------------- API CONFIG --------------------
+# --------------------------
+# 🔑 Groq API Config
+# --------------------------
 groq_api_key = "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"
 groq_url = "https://api.groq.com/openai/v1/chat/completions"
 headers = {
@@ -11,115 +15,200 @@ headers = {
     "Content-Type": "application/json"
 }
 
-# -------------------- EMBEDDING MODEL --------------------
-model = SentenceTransformer("all-MiniLM-L6-v2")
+# --------------------------
+# PART A - Flow Based Chatbot
+# --------------------------
+def flow_based_chat():
+    st.subheader("🗣️ Flow-Based Chatbot (Part A)")
+    st.caption("Fill in your details step by step, and get a professional profile summary.")
 
-# -------------------- Dummy PDF Data (Health Domain) --------------------
-pdf_data = {
-    "doc1": "A balanced diet includes fruits, vegetables, whole grains, and lean proteins. Drinking enough water is also crucial for overall health.",
-    "doc2": "Regular physical activity such as walking, jogging, or yoga improves cardiovascular health, strengthens muscles, and reduces stress.",
-    "doc3": "Mental health is equally important as physical health. Practices like meditation, adequate sleep, and social connection improve well-being.",
-    "doc4": "Diabetes management requires regular monitoring of blood sugar, following a low-sugar diet, exercising, and taking prescribed medications.",
-    "doc5": "Good hygiene practices such as handwashing, safe food handling, and vaccination help prevent infectious diseases."
-}
+    if "step" not in st.session_state:
+        st.session_state.step = 1
+    if "responses" not in st.session_state:
+        st.session_state.responses = {}
 
-# -------------------- HELPER FUNCTIONS --------------------
-def semantic_search(query, pdf_data, threshold=0.6):
-    query_embedding = model.encode([query])[0]
-    best_doc, best_score = None, -1
-    for _, text in pdf_data.items():
-        text_embedding = model.encode([text])[0]
-        score = np.dot(query_embedding, text_embedding) / (
-            np.linalg.norm(query_embedding) * np.linalg.norm(text_embedding)
-        )
-        if score > best_score:
-            best_doc, best_score = text, score
-    if best_score >= threshold:
-        return best_doc
-    return None
-
-def ask_groq(query):
-    payload = {
-        "model": "llama-3.1-8b-instant",
-        "messages": [{"role": "user", "content": query}],
-        "temperature": 0.7
-    }
-    response = requests.post(groq_url, headers=headers, json=payload)
-    if response.status_code == 200:
-        return response.json()["choices"][0]["message"]["content"].strip()
-    else:
-        return "⚠️ Groq API error. Please try again."
-
-# -------------------- STREAMLIT APP --------------------
-st.set_page_config(page_title="Health Research & Chatbot", layout="wide")
-st.title("🏥 Health Document Research & Chatbot System")
-
-# Sidebar navigation
-mode = st.sidebar.radio("Choose Mode:", [
-    "Part A - Single Q&A",
-    "Part B - Multi Q&A",
-    "Part C - Chatbot"
-])
-
-# -------------------- PART A --------------------
-if mode == "Part A - Single Q&A":
-    st.subheader("🔹 Part A: Single Question Answering")
-    query = st.text_input("Enter your health-related question:")
-
-    if query:
-        pdf_answer = semantic_search(query, pdf_data)
-        if pdf_answer:
-            st.success(f"📄 Answer from PDF: {pdf_answer}")
-        else:
-            st.info("❌ No relevant answer found in PDF. Using AI...")
-            st.write(ask_groq(query))
-
-# -------------------- PART B --------------------
-elif mode == "Part B - Multi Q&A":
-    st.subheader("🔹 Part B: Multi Question Answering")
-
-    if "qa_history" not in st.session_state:
-        st.session_state.qa_history = []
-
-    query = st.text_input("Ask your health question here:")
-
-    if st.button("Get Answer"):
-        if query:
-            pdf_answer = semantic_search(query, pdf_data)
-            if pdf_answer:
-                answer = f"📄 From PDF: {pdf_answer}"
+    if st.session_state.step == 1:
+        name = st.text_input("👉 Full Name")
+        if st.button("Next ➡️"):
+            if name.strip():
+                st.session_state.responses["Name"] = name
+                st.session_state.step = 2
+                st.rerun()
             else:
-                answer = f"❌ No relevant answer found in PDF.\n\n🤖 AI Suggestion: {ask_groq(query)}"
-            st.session_state.qa_history.append((query, answer))
+                st.warning("Please enter your name.")
 
-    # Show all asked Q&A
-    for q, a in st.session_state.qa_history:
-        st.markdown(f"**Q:** {q}")
-        st.markdown(f"**A:** {a}")
-        st.markdown("---")
+    elif st.session_state.step == 2:
+        age = st.number_input("🎂 Age", min_value=10, max_value=100, step=1)
+        if st.button("Next ➡️"):
+            st.session_state.responses["Age"] = age
+            st.session_state.step = 3
+            st.rerun()
 
-# -------------------- PART C --------------------
-elif mode == "Part C - Chatbot":
-    st.subheader("🔹 Part C: ChatGPT-like Health Chatbot")
+    elif st.session_state.step == 3:
+        email = st.text_input("📧 Email Address")
+        if st.button("Next ➡️"):
+            if "@" in email and "." in email:
+                st.session_state.responses["Email"] = email
+                st.session_state.step = 4
+                st.rerun()
+            else:
+                st.warning("Enter a valid email.")
+
+    elif st.session_state.step == 4:
+        skills = st.text_area("💡 Key Skills (comma separated)")
+        if st.button("Next ➡️"):
+            st.session_state.responses["Skills"] = skills
+            st.session_state.step = 5
+            st.rerun()
+
+    elif st.session_state.step == 5:
+        exp = st.radio("📌 Experience", ["Fresher", "1-2 years", "3-5 years", "5+ years"])
+        if st.button("Finish ✅"):
+            st.session_state.responses["Experience"] = exp
+            st.session_state.step = 6
+            st.rerun()
+
+    elif st.session_state.step == 6:
+        st.success("✅ Profile Completed")
+        st.markdown(f"""
+        ### 🎉 Candidate Profile
+        - **👤 Name:** {st.session_state.responses.get("Name")}
+        - **🎂 Age:** {st.session_state.responses.get("Age")}
+        - **📧 Email:** {st.session_state.responses.get("Email")}
+        - **💡 Skills:** {st.session_state.responses.get("Skills")}
+        - **📌 Experience:** {st.session_state.responses.get("Experience")}
+        """)
+        st.balloons()
+        if st.button("🔄 Restart Form"):
+            st.session_state.step = 1
+            st.session_state.responses = {}
+            st.rerun()
+
+# --------------------------
+# PART B - RAG Chatbot (PDFs + Groq API)
+# --------------------------
+def extract_text_from_pdfs(uploaded_files):
+    all_texts = []
+    for uploaded_file in uploaded_files:
+        pdf_reader = PdfReader(uploaded_file)
+        text = ""
+        for page in pdf_reader.pages:
+            try:
+                text += page.extract_text() + " "
+            except:
+                continue
+        all_texts.append(text.strip())
+    return all_texts
+
+def build_vectorstore(texts):
+    vectorizer = TfidfVectorizer(stop_words="english")
+    embeddings = vectorizer.fit_transform(texts)
+    return vectorizer, embeddings
+
+def query_groq(user_query, context=""):
+    """Send query to Groq API with optional context"""
+    try:
+        payload = {
+            "model": "llama-3.1-8b-instant",
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": f"Context: {context}\n\nQuestion: {user_query}"}
+            ],
+            "temperature": 0.7
+        }
+        response = requests.post(groq_url, headers=headers, json=payload)
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"⚠️ Error contacting Groq API: {e}"
+
+def rag_chatbot():
+    st.subheader("📚 RAG Chatbot (Part B)")
+    st.caption("Upload documents and ask focused questions. Answers come from your PDFs, fallback to Groq API.")
+
+    if "vectorizer" not in st.session_state:
+        st.session_state.vectorizer = None
+        st.session_state.embeddings = None
+        st.session_state.docs = None
+
+    uploaded_files = st.file_uploader("📂 Upload up to 20 PDFs", type="pdf", accept_multiple_files=True)
+
+    if uploaded_files:
+        if len(uploaded_files) > 20:
+            st.error("⚠️ You can upload maximum 20 PDFs.")
+            return
+        texts = extract_text_from_pdfs(uploaded_files)
+        vectorizer, embeddings = build_vectorstore(texts)
+        st.session_state.vectorizer = vectorizer
+        st.session_state.embeddings = embeddings
+        st.session_state.docs = texts
+        st.success("✅ Documents processed. You may now ask a question.")
+
+    query = st.text_input("💭 Your Question")
+    if st.button("Submit Question"):
+        if query and st.session_state.vectorizer is not None:
+            q_vec = st.session_state.vectorizer.transform([query])
+            sims = cosine_similarity(q_vec, st.session_state.embeddings).flatten()
+            idx = sims.argmax()
+
+            if sims[idx] > 0.2:  # relevant answer
+                context = st.session_state.docs[idx][:1000]
+                answer = query_groq(query, context)
+                st.markdown("### 📝 Answer from Documents")
+                st.info(answer)
+            else:
+                st.markdown("### 🌐 No match in documents, fallback to Groq API")
+                answer = query_groq(query)
+                st.info(answer)
+
+        elif query and st.session_state.vectorizer is None:
+            st.markdown("### 🌐 No documents uploaded, answering via Groq API")
+            answer = query_groq(query)
+            st.info(answer)
+
+# --------------------------
+# PART C - Free Chat Interface
+# --------------------------
+def free_chat():
+    st.subheader("💬 Free Chatbot (Part C)")
+    st.caption("Chat casually with the bot. It remembers your conversation like a real chat.")
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    user_query = st.chat_input("Ask me anything about health...")
+    user_input = st.text_input("📝 Type your message and press Send")
 
-    if user_query:
-        # First try PDF search
-        pdf_answer = semantic_search(user_query, pdf_data)
-        if pdf_answer:
-            bot_response = f"📄 From PDF: {pdf_answer}"
+    if st.button("Send"):
+        if user_input.strip():
+            st.session_state.chat_history.append(("user", user_input))
+            # call Groq for response
+            bot_reply = query_groq(user_input)
+            st.session_state.chat_history.append(("bot", bot_reply))
+
+    # Display messages
+    for role, msg in st.session_state.chat_history:
+        if role == "user":
+            st.markdown(f"<div style='text-align:right;padding:10px;margin:5px 0;'><b>You:</b> {msg}</div>", unsafe_allow_html=True)
         else:
-            bot_response = f"🤖 {ask_groq(user_query)}"
+            st.markdown(f"<div style='text-align:left;padding:10px;margin:5px 0;'><b>Bot:</b> {msg}</div>", unsafe_allow_html=True)
 
-        # Save chat
-        st.session_state.chat_history.append({"role": "user", "content": user_query})
-        st.session_state.chat_history.append({"role": "assistant", "content": bot_response})
+# --------------------------
+# MAIN APP
+# --------------------------
+def main():
+    st.set_page_config(page_title="INORBVICT AIML Assignment", layout="wide", page_icon="🚀")
+    st.title("🚀 INORBVICT – AIML Assignment Chatbot")
+    st.markdown("---")
 
-    # Show chat history like real chatbot
-    for chat in st.session_state.chat_history:
-        with st.chat_message(chat["role"]):
-            st.markdown(chat["content"])
+    option = st.sidebar.radio("🔽 Select Mode", 
+                              ["Flow Mode (Part A)", "RAG Mode (Part B)", "Chat Interface (Part C)"])
+
+    if option == "Flow Mode (Part A)":
+        flow_based_chat()
+    elif option == "RAG Mode (Part B)":
+        rag_chatbot()
+    elif option == "Chat Interface (Part C)":
+        free_chat()
+
+if __name__ == "__main__":
+    main()
