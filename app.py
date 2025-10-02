@@ -173,7 +173,8 @@ def rag_chatbot():
             st.info(answer)
 
 # --------------------------
-# PART C - Free Chat Interface
+# --------------------------
+# PART C - Free Chat Interface (Updated)
 # --------------------------
 def free_chat():
     st.subheader("💬 Free Chatbot (Part C)")
@@ -182,25 +183,20 @@ def free_chat():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    user_input = st.text_input("📝 Type your message and press Send")
-    if st.button("Send"):
-        if user_input.strip():
-            st.session_state.chat_history.append(("user", user_input))
-            bot_reply = query_groq(user_input)
-            st.session_state.chat_history.append(("bot", bot_reply))
+    # Form allows Enter key submission
+    with st.form(key="chat_form", clear_on_submit=True):
+        user_input = st.text_input("📝 Type your message")
+        submit = st.form_submit_button("Send")
 
-    # Display conversation
-    for role, msg in st.session_state.chat_history:
-        if role == "user":
-            st.markdown(
-                f"<div style='text-align:right;padding:10px;margin:5px 0;color:white;background:#0B93F6;border-radius:10px;max-width:70%;margin-left:auto;'><b>You:</b> {msg}</div>",
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                f"<div style='text-align:left;padding:10px;margin:5px 0;background:#E5E5EA;border-radius:10px;max-width:70%;margin-right:auto;'><b>Bot:</b> {msg}</div>",
-                unsafe_allow_html=True
-            )
+        if submit and user_input.strip():
+            st.session_state.chat_history.append(("You", user_input))
+            bot_reply = query_groq(user_input)
+            st.session_state.chat_history.append(("Bot", bot_reply))
+
+    # Display conversation above input
+    for role, msg in reversed(st.session_state.chat_history):
+        st.markdown(f"**{role}:** {msg}")
+
 
 # --------------------------
 # MAIN APP
