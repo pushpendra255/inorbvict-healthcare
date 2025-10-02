@@ -1,155 +1,180 @@
 import streamlit as st
-import PyPDF2
-import faiss
-import numpy as np
-from sentence_transformers import SentenceTransformer
+import os
+from PyPDF2 import PdfReader
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
-# -----------------------------
-# Part A – Flow-Based Chatbot
-# -----------------------------
-class FlowChatbot:
-    def __init__(self):
-        self.questions = [
-            "👤 What is your full name?",
-            "🎓 What is your highest qualification?",
-            "🏫 Which university/college did you graduate from?",
-            "💼 How many years of work experience do you have?",
-            "🛠️ What are your key technical skills?",
-            "🤖 Why do you want to join AI/ML at INORBVICT?",
-            "🌟 What is your career goal for the next 5 years?"
-        ]
-        self.answers = {}
-        self.index = 0
+# --------------------------
+# PART A - Flow Based Chatbot
+# --------------------------
+def flow_based_chat():
+    st.header("🗣️ Flow-Based Chatbot (Part A)")
 
-    def current_question(self):
-        if self.index < len(self.questions):
-            return self.questions[self.index]
-        return None
+    if "step" not in st.session_state:
+        st.session_state.step = 1
+    if "responses" not in st.session_state:
+        st.session_state.responses = {}
 
-    def submit(self, answer):
-        if not answer.strip():
-            return False, "⚠️ Please provide an answer."
-        self.answers[self.questions[self.index]] = answer
-        self.index += 1
-        return True, "✅ Answer recorded!"
-
-    def summary(self):
-        return "\n".join([f"**{q}** → {a}" for q, a in self.answers.items()])
-
-
-# -----------------------------
-# Part B – RAG Chatbot
-# -----------------------------
-class RAGChatbot:
-    def __init__(self):
-        self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
-        self.documents = []
-        self.metadata = []
-        self.index = None
-
-    def load_pdfs(self, uploaded_files):
-        self.documents = []
-        self.metadata = []
-
-        for file in uploaded_files:
-            reader = PyPDF2.PdfReader(file)
-            for i, page in enumerate(reader.pages):
-                text = page.extract_text()
-                if text:
-                    self.documents.append(text)
-                    self.metadata.append({
-                        "filename": file.name,
-                        "page": i + 1
-                    })
-
-        if self.documents:
-            embeddings = self.embedder.encode(self.documents, convert_to_numpy=True)
-            dim = embeddings.shape[1]
-            self.index = faiss.IndexFlatL2(dim)
-            self.index.add(embeddings)
-
-    def answer(self, query, top_k=3):
-        if not self.index:
-            return "⚠️ Please upload PDF files first."
-
-        query_vec = self.embedder.encode([query], convert_to_numpy=True)
-        D, I = self.index.search(query_vec, top_k)
-
-        results = []
-        for idx in I[0]:
-            if idx < len(self.documents):
-                snippet = self.documents[idx][:500]
-                meta = self.metadata[idx]
-                results.append(f"📄 **{meta['filename']} (Page {meta['page']})** → {snippet}")
-
-        final_answer = "\n\n".join(results) if results else "❌ No relevant content found."
-        return final_answer
-
-
-# -----------------------------
-# Part C – Streamlit UI
-# -----------------------------
-st.set_page_config(page_title="INORBVICT AIML Assignment", layout="centered")
-
-st.title("🤖 INORBVICT – AIML Assignment Chatbot")
-st.markdown("### Select a mode from the dropdown below 👇")
-
-mode = st.selectbox("Choose Mode", ["Part A – Flow Chatbot", "Part B – RAG Chatbot"])
-
-# -----------------------------
-# UI for Part A
-# -----------------------------
-if mode == "Part A – Flow Chatbot":
-    st.header("🗂️ Flow-Based Chatbot (Guided Interview)")
-
-    if "flow" not in st.session_state:
-        st.session_state.flow = FlowChatbot()
-
-    q = st.session_state.flow.current_question()
-    if q:
-        st.info(q)
-        ans = st.text_input("✍️ Your Answer", key=f"flow_q_{st.session_state.flow.index}")
-        if st.button("➡️ Submit Answer"):
-            ok, msg = st.session_state.flow.submit(ans)
-            if ok:
-                st.success(msg)
-                st.rerun()  # move to next question
+    # Step 1: Name
+    if st.session_state.step == 1:
+        name = st.text_input("👉 What is your full name?")
+        if st.button("Submit Name"):
+            if name.strip() != "":
+                st.session_state.responses["Name"] = name
+                st.session_state.step = 2
+                st.rerun()
             else:
-                st.warning(msg)
-    else:
+                st.warning("Please enter your name.")
+
+    # Step 2: Age
+    elif st.session_state.step == 2:
+        age = st.number_input("🎂 How old are you?", min_value=10, max_value=100, step=1)
+        if st.button("Submit Age"):
+            st.session_state.responses["Age"] = age
+            st.session_state.step = 3
+            st.rerun()
+
+    # Step 3: Email
+    elif st.session_state.step == 3:
+        email = st.text_input("📧 What is your email address?")
+        if st.button("Submit Email"):
+            if "@" in email and "." in email:
+                st.session_state.responses["Email"] = email
+                st.session_state.step = 4
+                st.rerun()
+            else:
+                st.warning("Please enter a valid email.")
+
+    # Step 4: Skills
+    elif st.session_state.step == 4:
+        skills = st.text_area("💡 What are your key skills? (comma separated)")
+        if st.button("Submit Skills"):
+            st.session_state.responses["Skills"] = skills
+            st.session_state.step = 5
+            st.rerun()
+
+    # Step 5: Experience
+    elif st.session_state.step == 5:
+        exp = st.radio("📌 How much experience do you have?",
+                       ["Fresher", "1-2 years", "3-5 years", "5+ years"])
+        if st.button("Submit Experience"):
+            st.session_state.responses["Experience"] = exp
+            st.session_state.step = 6
+            st.rerun()
+
+    # Final Summary
+    elif st.session_state.step == 6:
+        st.success("✅ Thank you! Here’s your profile summary:")
+        st.markdown(f"""
+        ### 🎉 Profile Summary
+        - **👤 Name:** {st.session_state.responses.get("Name")}
+        - **🎂 Age:** {st.session_state.responses.get("Age")}
+        - **📧 Email:** {st.session_state.responses.get("Email")}
+        - **💡 Skills:** {st.session_state.responses.get("Skills")}
+        - **📌 Experience:** {st.session_state.responses.get("Experience")}
+        """)
         st.balloons()
-        st.success("🎉 All questions answered successfully!")
-        st.markdown("### 📋 Candidate Summary")
-        st.markdown(st.session_state.flow.summary())
 
-# -----------------------------
-# UI for Part B
-# -----------------------------
-elif mode == "Part B – RAG Chatbot":
-    st.header("📑 Retrieval-Augmented Generation (RAG) Chatbot")
+        if st.button("🔄 Restart"):
+            st.session_state.step = 1
+            st.session_state.responses = {}
+            st.rerun()
 
-    if "rag" not in st.session_state:
-        st.session_state.rag = RAGChatbot()
+# --------------------------
+# PART B - RAG Chatbot
+# --------------------------
+def extract_text_from_pdfs(uploaded_files):
+    all_texts = []
+    for uploaded_file in uploaded_files:
+        pdf_reader = PdfReader(uploaded_file)
+        text = ""
+        for page in pdf_reader.pages:
+            try:
+                text += page.extract_text() + " "
+            except:
+                continue
+        all_texts.append(text.strip())
+    return all_texts
 
-    uploaded_files = st.file_uploader(
-        "📂 Upload up to 20 PDF files",
-        type=["pdf"],
-        accept_multiple_files=True
-    )
+def build_vectorstore(texts):
+    vectorizer = TfidfVectorizer(stop_words="english")
+    embeddings = vectorizer.fit_transform(texts)
+    return vectorizer, embeddings
+
+def rag_chatbot():
+    st.header("📚 RAG Chatbot (Part B)")
+    st.markdown("Upload up to **20 PDFs**, then ask any question. The bot will answer only from uploaded docs.")
+
+    if "vectorizer" not in st.session_state:
+        st.session_state.vectorizer = None
+        st.session_state.embeddings = None
+        st.session_state.docs = None
+
+    uploaded_files = st.file_uploader("📂 Upload PDF documents", type="pdf", accept_multiple_files=True)
 
     if uploaded_files:
         if len(uploaded_files) > 20:
-            st.error("⚠️ You can upload maximum 20 files only.")
-        else:
-            st.session_state.rag.load_pdfs(uploaded_files)
-            st.success(f"✅ Loaded {len(uploaded_files)} file(s) successfully!")
+            st.error("⚠️ You can upload maximum 20 PDFs.")
+            return
 
-    query = st.text_input("🔍 Ask a question from the uploaded PDFs")
-    if st.button("Get Answer"):
-        if query.strip():
-            with st.spinner("🤔 Thinking... Searching in your documents..."):
-                ans = st.session_state.rag.answer(query)
-                st.markdown("### 📝 Answer")
-                st.write(ans)
-        else:
-            st.warning("Please enter a question.")
+        texts = extract_text_from_pdfs(uploaded_files)
+        vectorizer, embeddings = build_vectorstore(texts)
+        st.session_state.vectorizer = vectorizer
+        st.session_state.embeddings = embeddings
+        st.session_state.docs = texts
+        st.success("✅ Documents processed successfully! Now ask your question below.")
+
+    query = st.text_input("💭 Ask a question about your uploaded documents:")
+    if query and st.session_state.vectorizer is not None:
+        q_vec = st.session_state.vectorizer.transform([query])
+        sims = cosine_similarity(q_vec, st.session_state.embeddings).flatten()
+        idx = sims.argmax()
+        answer = st.session_state.docs[idx][:600] + "..."  # snippet
+        st.markdown(f"### 📝 Answer\n{answer}")
+    elif query and st.session_state.vectorizer is None:
+        st.warning("⚠️ Please upload PDF(s) first.")
+
+# --------------------------
+# PART C - Free Chat Interface
+# --------------------------
+def free_chat():
+    st.header("💬 Chat Interface (Part C)")
+    st.write("This is a simple free-form chatbot where you can talk casually.")
+
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    user_input = st.text_input("📝 Type your message:")
+    if st.button("Send"):
+        if user_input.strip():
+            st.session_state.chat_history.append(("You", user_input))
+            # simple echo bot (can be replaced with LLM integration)
+            response = f"I understood your message: **{user_input}**"
+            st.session_state.chat_history.append(("Bot", response))
+
+    if st.session_state.chat_history:
+        for role, msg in st.session_state.chat_history:
+            if role == "You":
+                st.markdown(f"**🧑‍💻 You:** {msg}")
+            else:
+                st.markdown(f"**🤖 Bot:** {msg}")
+
+# --------------------------
+# MAIN APP - Dropdown
+# --------------------------
+def main():
+    st.set_page_config(page_title="INORBVICT AIML Assignment", layout="wide")
+    st.title("🚀 INORBVICT – AIML Assignment Chatbot")
+
+    option = st.sidebar.selectbox("🔽 Select Mode", 
+                                  ["Flow Mode (Part A)", "RAG Mode (Part B)", "Chat Interface (Part C)"])
+
+    if option == "Flow Mode (Part A)":
+        flow_based_chat()
+    elif option == "RAG Mode (Part B)":
+        rag_chatbot()
+    elif option == "Chat Interface (Part C)":
+        free_chat()
+
+if __name__ == "__main__":
+    main()
