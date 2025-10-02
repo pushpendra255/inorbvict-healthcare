@@ -8,12 +8,50 @@ from sklearn.metrics.pairwise import cosine_similarity
 # --------------------------
 # 🔑 Groq API Config
 # --------------------------
-groq_api_key = "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"
+groq_api_key = "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"   # <- apna key daalo
 groq_url = "https://api.groq.com/openai/v1/chat/completions"
 headers = {
     "Authorization": f"Bearer {groq_api_key}",
     "Content-Type": "application/json"
 }
+
+# --------------------------
+# Utility Functions
+# --------------------------
+def extract_text_from_pdfs(uploaded_files):
+    all_texts = []
+    for uploaded_file in uploaded_files:
+        pdf_reader = PdfReader(uploaded_file)
+        text = ""
+        for page in pdf_reader.pages:
+            try:
+                text += page.extract_text() + " "
+            except:
+                continue
+        all_texts.append(text.strip())
+    return all_texts
+
+def build_vectorstore(texts):
+    vectorizer = TfidfVectorizer(stop_words="english")
+    embeddings = vectorizer.fit_transform(texts)
+    return vectorizer, embeddings
+
+def query_groq(user_query, context=""):
+    """Send query to Groq API with optional context"""
+    try:
+        payload = {
+            "model": "llama-3.1-8b-instant",
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": f"Context: {context}\n\nQuestion: {user_query}"}
+            ],
+            "temperature": 0.7
+        }
+        response = requests.post(groq_url, headers=headers, json=payload)
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"⚠️ Error contacting Groq API: {e}"
 
 # --------------------------
 # PART A - Flow Based Chatbot
@@ -79,52 +117,18 @@ def flow_based_chat():
         - **📌 Experience:** {st.session_state.responses.get("Experience")}
         """)
         st.balloons()
+
         if st.button("🔄 Restart Form"):
             st.session_state.step = 1
             st.session_state.responses = {}
             st.rerun()
 
 # --------------------------
-# PART B - RAG Chatbot (PDFs + Groq API)
+# PART B - RAG Chatbot (PDFs + Groq API Fallback)
 # --------------------------
-def extract_text_from_pdfs(uploaded_files):
-    all_texts = []
-    for uploaded_file in uploaded_files:
-        pdf_reader = PdfReader(uploaded_file)
-        text = ""
-        for page in pdf_reader.pages:
-            try:
-                text += page.extract_text() + " "
-            except:
-                continue
-        all_texts.append(text.strip())
-    return all_texts
-
-def build_vectorstore(texts):
-    vectorizer = TfidfVectorizer(stop_words="english")
-    embeddings = vectorizer.fit_transform(texts)
-    return vectorizer, embeddings
-
-def query_groq(user_query, context=""):
-    """Send query to Groq API with optional context"""
-    try:
-        payload = {
-            "model": "llama-3.1-8b-instant",
-            "messages": [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": f"Context: {context}\n\nQuestion: {user_query}"}
-            ],
-            "temperature": 0.7
-        }
-        response = requests.post(groq_url, headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"⚠️ Error contacting Groq API: {e}"
-
 def rag_chatbot():
     st.subheader("📚 RAG Chatbot (Part B)")
-    st.caption("Upload documents and ask focused questions. Answers come from your PDFs, fallback to Groq API.")
+    st.caption("Upload documents and ask focused questions. Answers come from your PDFs first, fallback to Groq API if not found.")
 
     if "vectorizer" not in st.session_state:
         st.session_state.vectorizer = None
@@ -145,24 +149,26 @@ def rag_chatbot():
         st.success("✅ Documents processed. You may now ask a question.")
 
     query = st.text_input("💭 Your Question")
+
     if st.button("Submit Question"):
         if query and st.session_state.vectorizer is not None:
             q_vec = st.session_state.vectorizer.transform([query])
             sims = cosine_similarity(q_vec, st.session_state.embeddings).flatten()
             idx = sims.argmax()
 
-            if sims[idx] > 0.2:  # relevant answer
-                context = st.session_state.docs[idx][:1000]
+            if sims[idx] > 0.25:  # ✅ Relevant answer found in PDF
+                context = st.session_state.docs[idx][:1500]
+                st.markdown("### 📖 Answer from Uploaded PDFs")
                 answer = query_groq(query, context)
-                st.markdown("### 📝 Answer from Documents")
                 st.info(answer)
             else:
-                st.markdown("### 🌐 No match in documents, fallback to Groq API")
+                st.warning("❌ Answer not found in uploaded PDFs. Fetching from Groq API instead...")
                 answer = query_groq(query)
+                st.markdown("### 🌐 Answer from Groq API")
                 st.info(answer)
 
         elif query and st.session_state.vectorizer is None:
-            st.markdown("### 🌐 No documents uploaded, answering via Groq API")
+            st.warning("⚠️ No documents uploaded. Using Groq API for answer.")
             answer = query_groq(query)
             st.info(answer)
 
@@ -176,7 +182,14 @@ def free_chat():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # 📌 Show all previous messages above input box
+    user_input = st.text_input("📝 Type your message and press Send")
+    if st.button("Send"):
+        if user_input.strip():
+            st.session_state.chat_history.append(("user", user_input))
+            bot_reply = query_groq(user_input)
+            st.session_state.chat_history.append(("bot", bot_reply))
+
+    # Display conversation
     for role, msg in st.session_state.chat_history:
         if role == "user":
             st.markdown(
@@ -189,18 +202,23 @@ def free_chat():
                 unsafe_allow_html=True
             )
 
-    # 📝 Chat input (auto clears & submit on Enter)
-    user_input = st.chat_input("Type your message...")
+# --------------------------
+# MAIN APP
+# --------------------------
+def main():
+    st.set_page_config(page_title="INORBVICT AIML Assignment", layout="wide", page_icon="🚀")
+    st.title("🚀 INORBVICT – AIML Assignment Chatbot")
+    st.markdown("---")
 
-    if user_input:  
-        # Add user message
-        st.session_state.chat_history.append(("user", user_input))
+    option = st.sidebar.radio("🔽 Select Mode", 
+                               ["Flow Mode (Part A)", "RAG Mode (Part B)", "Chat Interface (Part C)"])
 
-        # Call Groq API for reply
-        bot_reply = query_groq(user_input)
-        st.session_state.chat_history.append(("bot", bot_reply))
-
-        st.rerun()  # 🔄 rerun to refresh UI & clear input
+    if option == "Flow Mode (Part A)":
+        flow_based_chat()
+    elif option == "RAG Mode (Part B)":
+        rag_chatbot()
+    elif option == "Chat Interface (Part C)":
+        free_chat()
 
 if __name__ == "__main__":
     main()
