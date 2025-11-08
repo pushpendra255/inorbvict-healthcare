@@ -1,6 +1,4 @@
-# 🚀 INORBVICT – AIML Assignment Chatbot
-
-This repository contains the submission for the **AIML Assignment** given by **INORBVICT Healthcare India Pvt. Ltd.**  
+# 🚀 INORBVICT – AIML Assignment Chatbot 
 
 It demonstrates a **multi-mode chatbot system** built with **Streamlit** and **Groq LLaMA-3 API**, covering all three assignment parts:
 
